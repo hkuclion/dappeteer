@@ -16,6 +16,7 @@ import { unlock } from './unlock';
 
 export type SetSignedIn = (state: boolean) => Promise<void>;
 export type GetSingedIn = () => Promise<boolean>;
+export type GetConfirmPage = () => Page;
 
 export const getMetamask = async (page: Page, version?: string): Promise<Dappeteer> => {
   // modified window object to kep state between tests
@@ -30,19 +31,24 @@ export const getMetamask = async (page: Page, version?: string): Promise<Dappete
         ? ((window as unknown) as { signedIn: boolean }).signedIn
         : true,
     );
+  const getConfirmPage = (): Promise<Page> => result.confirmPage;
 
-  return {
+  const result = {
     addNetwork: addNetwork(page, version),
     approve: approve(page, version),
     confirmTransaction: confirmTransaction(page, getSingedIn, version),
     importPK: importPk(page, version),
     lock: lock(page, setSignedIn, getSingedIn, version),
-    sign: sign(page, getSingedIn, version),
+    sign: sign(page, getSingedIn, version, getConfirmPage),
     switchAccount: switchAccount(page, version),
     switchNetwork: switchNetwork(page, version),
     unlock: unlock(page, setSignedIn, getSingedIn, version),
     addToken: addToken(page),
     getTokenBalance: getTokenBalance(page),
     page,
+    confirmPage: null,
+    confirmResolve: undefined,
   };
+
+  return result;
 };

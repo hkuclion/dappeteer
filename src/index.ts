@@ -1,5 +1,5 @@
 import * as puppeteer from 'puppeteer';
-import { Page } from 'puppeteer';
+import {Browser, Page} from 'puppeteer';
 
 import { getMetamask } from './metamask';
 import downloader, { Path } from './metamaskDownloader';
@@ -40,6 +40,8 @@ export type Dappeteer = {
   addToken: (tokenAddress: string) => Promise<void>;
   getTokenBalance: (tokenSymbol: string) => Promise<number>;
   page: Page;
+  confirmPage: Promise<Page>;
+  confirmResolve: (data?) => void;
 };
 
 export type TransactionOptions = {
@@ -119,11 +121,13 @@ export async function setupMetamask(
     options.password || 'password1234',
   );
 
-  await closeNotificationPage(browser);
-
   await showTestNets(page);
 
-  return getMetamask(page);
+  const dappetteer = await getMetamask(page);
+
+  await closeNotificationPage(browser, dappetteer);
+
+  return dappetteer;
 }
 
 /**
@@ -156,12 +160,19 @@ async function closeHomeScreen(browser: puppeteer.Browser): Promise<puppeteer.Pa
   });
 }
 
-async function closeNotificationPage(browser: puppeteer.Browser): Promise<void> {
+async function closeNotificationPage(browser: Browser, dappetteer: Dappeteer): Promise<void> {
+  dappetteer.confirmPage = new Promise((resolve) => (dappetteer.confirmResolve = resolve));
+
   browser.on('targetcreated', async (target) => {
     if (target.url().match('chrome-extension://[a-z]+/notification.html')) {
       try {
-        const page = await target.page();
-        await page.close();
+        if (dappetteer.confirmResolve) {
+          const confirmPage = await target.page();
+          dappetteer.confirmResolve(confirmPage);
+          confirmPage.on('close', () => {
+            dappetteer.confirmPage = new Promise((resolve) => (dappetteer.confirmResolve = resolve));
+          });
+        }
       } catch {
         return;
       }
